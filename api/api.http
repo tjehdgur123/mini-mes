@@ -1,0 +1,72 @@
+### Mini MES API 수동 테스트 (IntelliJ HTTP Client / VS Code REST Client)
+### 샘플 데이터(02_seed.sql) 기준. 위에서부터 순서대로 실행
+
+@base = http://localhost:8080/api
+
+### 재공 현황
+GET {{base}}/wip
+
+### 공정별 수율·직행률
+GET {{base}}/reports/process-yield
+
+### LOT 상세 (분할 전 부모 LOT 이력 포함)
+GET {{base}}/lots/L-20261012-002A
+
+### 역방향 추적: 완제품 LOT에 들어간 원자재
+GET {{base}}/lots/L-20261012-002A/trace?direction=backward
+
+### 정방향 추적: Ni 페이스트 LOT이 들어간 생산 LOT
+GET {{base}}/lots/R-NI-2610-01/trace?direction=forward
+
+### 측정 중인 LOT Track-out -> 마지막 공정이므로 FINISHED, 작업지시 COMPLETED
+POST {{base}}/lots/L-20261012-002B/track-out
+Content-Type: application/json
+
+{
+  "goodQty": 48300,
+  "defects": [
+    { "defectCode": "D-CAP", "qty": 320 },
+    { "defectCode": "D-IR",  "qty": 180 }
+  ],
+  "requestKey": "manual-out-002B-1"
+}
+
+### 같은 요청 재전송 -> replayed: true, 수량 변화 없음
+POST {{base}}/lots/L-20261012-002B/track-out
+Content-Type: application/json
+
+{
+  "goodQty": 48300,
+  "defects": [
+    { "defectCode": "D-CAP", "qty": 320 },
+    { "defectCode": "D-IR",  "qty": 180 }
+  ],
+  "requestKey": "manual-out-002B-1"
+}
+
+### 적층 대기 LOT을 소성로에 투입 -> 409 EQUIPMENT_PROCESS_MISMATCH
+POST {{base}}/lots/L-20261014-002/track-in
+Content-Type: application/json
+
+{ "equipmentCode": "SN-01", "operatorId": "OP103", "requestKey": "manual-in-1402-wrong" }
+
+### 올바른 설비(적층기)에 투입
+POST {{base}}/lots/L-20261014-002/track-in
+Content-Type: application/json
+
+{ "equipmentCode": "ST-01", "operatorId": "OP103", "requestKey": "manual-in-1402-p30" }
+
+### HOLD LOT 해제 (소성 크랙 급증 LOT)
+POST {{base}}/lots/L-20261014-001/release-hold
+Content-Type: application/json
+
+{ "operatorId": "QA01", "reason": "샘플 단면 분석 결과 내부 크랙 없음" }
+
+### 작업지시 생성 -> LOT 자동 발행
+POST {{base}}/work-orders
+Content-Type: application/json
+
+{ "itemCode": "MLCC-0805-X7R-100V", "planQty": 250000, "lotSize": 100000, "dueDate": "2026-10-30" }
+
+### 작업지시 목록
+GET {{base}}/work-orders

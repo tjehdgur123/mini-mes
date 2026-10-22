@@ -1,0 +1,22 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    # 본인 환경에 맞게 수정하거나 환경변수(DB_URL, DB_USER, DB_PASSWORD)로 지정
+    url: ${DB_URL:jdbc:oracle:thin:@localhost:1521/XEPDB1}
+    username: ${DB_USER:mes}
+    password: ${DB_PASSWORD:mes}
+    hikari:
+      maximum-pool-size: 10
+  jackson:
+    default-property-inclusion: non_null
+
+mes:
+  hold:
+    # Track-out 직후 동일 공정 다른 LOT 평균 대비 이 비율 이상 수율이 낮으면 자동 HOLD (0.01 = 1%p)
+    yield-drop-threshold: 0.01
+
+logging:
+  level:
+    com.minimes: DEBUG
