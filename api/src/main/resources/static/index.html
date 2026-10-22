@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mini MES · MLCC Line</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --surface-2: #f3f2ee;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --good: #0ca30c;
+    --good-ink: #006300;
+    --warning: #fab219;
+    --serious: #ec835a;
+    --critical: #d03b3b;
+    --idle: #b4b2a9;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --surface-2: #222220;
+      --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255, 255, 255, 0.10);
+      --series-1: #3987e5; --series-2: #d95926; --good-ink: #0ca30c; --idle: #5c5b57;
+      --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #222220;
+    --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255, 255, 255, 0.10);
+    --series-1: #3987e5; --series-2: #d95926; --good-ink: #0ca30c; --idle: #5c5b57;
+    --shadow: none;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font: 14px/1.45 "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--surface);
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: -0.01em; }
+  header h1 span { color: var(--muted); font-weight: 500; }
+  .grow { flex: 1; }
+  .meta { color: var(--ink-2); font-size: 13px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--good); display: inline-block; margin-right: 6px; }
+  .pulse.stale { background: var(--critical); }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid var(--border); font-size: 12px; font-weight: 600; background: var(--surface-2);
+  }
+  .badge.ok { color: var(--good-ink); }
+  .badge.bad { color: var(--critical); }
+  button.theme {
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-2);
+    border-radius: 8px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+
+  main { padding: 20px 24px 40px; display: grid; gap: 16px; max-width: 1600px; margin: 0 auto; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; box-shadow: var(--shadow); min-width: 0;
+  }
+  .card h2 { font-size: 14px; margin: 0 0 12px; display: flex; align-items: baseline; gap: 8px; }
+  .card h2 small { color: var(--muted); font-weight: 400; font-size: 12px; }
+
+  /* KPI */
+  .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+  .kpi { padding: 14px 16px; }
+  .kpi .label { color: var(--ink-2); font-size: 12px; }
+  .kpi .value { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-top: 2px; }
+  .kpi .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .kpi.alert .value { color: var(--critical); }
+  .kpi .sub.alert { color: var(--critical); font-weight: 600; }
+
+  /* 라인 흐름 */
+  .line { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+  .proc { background: var(--surface-2); border-radius: 10px; padding: 10px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .proc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 4px; }
+  .proc-head b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .proc-head span { color: var(--muted); font-size: 11px; }
+  .eq {
+    border-radius: 8px; background: var(--surface); border: 1px solid var(--border);
+    padding: 8px; font-size: 12px; position: relative; overflow: hidden;
+  }
+  .eq::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--idle); }
+  .eq.RUN::before { background: var(--good); }
+  .eq.DOWN::before { background: var(--critical); }
+  .eq.PM::before { background: var(--warning); }
+  .eq .eq-top { display: flex; justify-content: space-between; gap: 4px; font-weight: 600; }
+  .st { font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .st.RUN { color: var(--good-ink); } .st.IDLE { color: var(--muted); }
+  .st.DOWN { color: var(--critical); } .st.PM { color: #b37a00; }
+  :root[data-theme="dark"] .st.PM { color: var(--warning); }
+  @media (prefers-color-scheme: dark) { :root:where(:not([data-theme="light"])) .st.PM { color: var(--warning); } }
+  .eq .eq-lot { color: var(--ink-2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .eq .bar { height: 3px; background: var(--grid); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+  .eq .bar i { display: block; height: 100%; background: var(--good); border-radius: 2px; transition: width 0.8s linear; }
+  .queue { display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; }
+  .queue-label { color: var(--muted); font-size: 11px; }
+  .chip {
+    font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--surface);
+    border: 1px solid var(--border); color: var(--ink-2); white-space: nowrap; cursor: default;
+  }
+  .chip.hold { border-color: var(--critical); color: var(--critical); font-weight: 600; }
+
+  .two { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; }
+  .three { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; }
+
+  /* 수율 표 */
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-left: auto; }
+  .seg button { border: 0; background: transparent; color: var(--ink-2); padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .seg button.on { background: var(--surface-2); color: var(--ink); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--axis); }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--grid); font-size: 13px; }
+  td.num, th.num { text-align: right; }
+  tr:last-child td { border-bottom: 0; }
+  .barcell { width: 40%; }
+  .hbar { position: relative; height: 14px; }
+  .hbar i { position: absolute; left: 0; top: 2px; height: 10px; border-radius: 0 4px 4px 0; background: var(--series-1); min-width: 2px; }
+  .hbar.warn i { background: var(--series-2); }
+  .rty { font-size: 13px; color: var(--ink-2); margin-top: 10px; }
+  .rty { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .rty b { color: var(--ink); font-size: 18px; margin-left: 6px; }
+  .legend { color: var(--muted); font-size: 12px; display: inline-flex; gap: 12px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+
+  /* 파레토 */
+  .pareto-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) 64px 52px; gap: 8px; align-items: center; padding: 4px 0; font-size: 13px; }
+  .pareto-row .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
+  .pareto-row .num { text-align: right; }
+  .pareto-row .cum { text-align: right; color: var(--muted); font-size: 12px; }
+  .pareto-row.top .name { color: var(--ink); font-weight: 600; }
+
+  /* HOLD, 이벤트 */
+  .hold-item { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--grid); }
+  .hold-item:last-child { border-bottom: 0; }
+  .hold-item .lot { font-weight: 600; }
+  .hold-item .reason { color: var(--ink-2); font-size: 12px; }
+  .hold-item button {
+    align-self: center; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
+    border-radius: 8px; padding: 5px 10px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  .hold-item button:hover { border-color: var(--ink-2); }
+  .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+  .feed { max-height: 360px; overflow: auto; }
+  .ev { display: grid; grid-template-columns: 62px 82px minmax(0, 1fr); gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--grid); font-size: 13px; }
+  .ev:last-child { border-bottom: 0; }
+  .ev time { color: var(--muted); }
+  .ev .t { font-size: 11px; font-weight: 700; }
+  .ev .t.TRACK_IN { color: var(--series-1); }
+  .ev .t.TRACK_OUT { color: var(--good-ink); }
+  .ev .t.DOWN { color: var(--critical); }
+  .ev .t.PM { color: #b37a00; }
+  .ev .d { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  #tip {
+    position: fixed; pointer-events: none; z-index: 20; background: var(--ink); color: var(--page);
+    border-radius: 8px; padding: 6px 10px; font-size: 12px; max-width: 320px; opacity: 0; transition: opacity 0.1s;
+  }
+
+  @media (max-width: 1200px) {
+    .line { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .two, .three { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    header, main { padding-left: 16px; padding-right: 16px; }
+    .line { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .pareto-row { grid-template-columns: 96px minmax(0, 1fr) 56px; }
+    .pareto-row .cum { display: none; }
+    .card h2 { flex-wrap: wrap; }
+    .seg { margin-left: 0; width: 100%; }
+    .seg button { flex: 1; }
+    .col-in { display: none; }
+    td { white-space: nowrap; }
+    .barcell { width: 35%; }
+    .ev { grid-template-columns: 58px 34px minmax(0, 1fr); }
+    .ev .d { white-space: normal; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mini MES <span>· MLCC Line</span></h1>
+  <div class="grow"></div>
+  <div class="meta">
+    <span><i class="pulse" id="pulse"></i><span id="clock">연결 중</span></span>
+    <span class="badge" id="integrity">정합성 확인 중</span>
+    <button class="theme" id="themeBtn" type="button">테마</button>
+  </div>
+</header>
+
+<main>
+  <section class="kpis" id="kpis"></section>
+
+  <section class="card">
+    <h2>라인 현황 <small>공정 순서대로 · 설비 상태와 대기 LOT</small></h2>
+    <div class="line" id="line"></div>
+  </section>
+
+  <section class="two">
+    <div class="card">
+      <h2 style="display:flex;align-items:center">공정별 수율 <small>누적 실적 기준</small>
+        <div class="seg" id="itemSeg"></div>
+      </h2>
+      <table>
+        <thead><tr><th>공정</th><th class="num col-in">투입</th><th class="num">수율</th><th class="barcell">불량률</th></tr></thead>
+        <tbody id="yieldBody"></tbody>
+      </table>
+      <div class="rty" id="rty"></div>
+    </div>
+    <div class="card">
+      <h2>불량 파레토 <small>유형별 불량 수량 · 누적 비율</small></h2>
+      <div id="pareto"></div>
+    </div>
+  </section>
+
+  <section class="three">
+    <div class="card">
+      <h2>최근 이벤트 <small>투입 · 완료 · 비가동</small></h2>
+      <div class="feed" id="feed"></div>
+    </div>
+    <div class="card">
+      <h2>HOLD LOT <small>자동 이상 감지 · 품질 판정 대기</small></h2>
+      <div id="holds"></div>
+    </div>
+  </section>
+</main>
+<div id="tip"></div>
+
+<script>
+const API = "/api";
+const PROCESS_ORDER = ["P10", "P20", "P30", "P40", "P50", "P60", "P70", "P80"];
+const STATUS_LABEL = { RUN: "● 가동", IDLE: "○ 대기", DOWN: "✖ 고장", PM: "▲ 보전" };
+const EVENT_LABEL = { TRACK_IN: "투입", TRACK_OUT: "완료", DOWN: "고장", PM: "보전" };
+const CYCLE_HINT = { P10: 2, P20: 2, P30: 2, P40: 1.5, P50: 5, P60: 2, P70: 2, P80: 3.5 };
+
+let selectedItem = null;
+let lastOk = 0;
+let state = {};
+
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => (n == null ? "-" : Number(n).toLocaleString("ko-KR"));
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const hhmmss = (iso) => (iso ? iso.substring(11, 19) : "");
+const shortLot = (lot) => lot.replace(/^L-\d{4}/, "");
+
+async function get(path) {
+  const r = await fetch(API + path, { cache: "no-store" });
+  if (!r.ok) throw new Error(path + " " + r.status);
+  return r.json();
+}
+
+// ------------------------------------------------------------------ 테마
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem("mes-theme"); } catch (e) {}
+  if (saved) document.documentElement.dataset.theme = saved;
+  $("themeBtn").onclick = () => {
+    const cur = document.documentElement.dataset.theme
+      || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next = cur === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("mes-theme", next); } catch (e) {}
+  };
+})();
+
+// ------------------------------------------------------------------ 툴팁
+const tip = $("tip");
+document.addEventListener("mousemove", (e) => {
+  const t = e.target.closest("[data-tip]");
+  if (!t) { tip.style.opacity = 0; return; }
+  tip.innerHTML = t.dataset.tip;
+  const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8);
+  tip.style.left = x + "px";
+  tip.style.top = (e.clientY + 16) + "px";
+  tip.style.opacity = 1;
+});
+
+// ------------------------------------------------------------------ 렌더링
+function renderKpis(s) {
+  const k = [
+    { label: "진행 작업지시", value: fmt(s.activeWorkOrders), sub: "발행·진행 중" },
+    { label: "재공 LOT", value: fmt(s.wipLots), sub: "대기 + 가공 + HOLD" },
+    { label: "HOLD LOT", value: fmt(s.holdLots), sub: s.holdLots ? "품질 판정 필요" : "이상 없음", alert: s.holdLots > 0 },
+    { label: "설비 가동", value: `${s.runningEquipment}/${s.totalEquipment}`,
+      sub: s.downEquipment ? `✖ 비가동 ${s.downEquipment}대` : "비가동 없음", subAlert: s.downEquipment > 0 },
+    { label: "오늘 완료 수량", value: fmt(s.todayFinishedQty), sub: "최종 공정 양품 (EA)" },
+    { label: "오늘 불량 수량", value: fmt(s.todayDefectQty), sub: `Track-out ${fmt(s.todayTrackOuts)}건` },
+  ];
+  $("kpis").innerHTML = k.map((x) => `
+    <div class="card kpi ${x.alert ? "alert" : ""}">
+      <div class="label">${x.label}</div>
+      <div class="value">${x.value}</div>
+      <div class="sub ${x.subAlert ? "alert" : ""}">${x.sub}</div>
+    </div>`).join("");
+}
+
+function renderLine(equipment, wip) {
+  const byProc = {};
+  PROCESS_ORDER.forEach((p) => (byProc[p] = { name: "", eqs: [], waiting: [], holds: [] }));
+  equipment.forEach((e) => { byProc[e.processCode].name = e.processName; byProc[e.processCode].eqs.push(e); });
+  wip.forEach((w) => {
+    if (w.lotStatus === "WAIT" && w.nextProcessCode && byProc[w.nextProcessCode]) byProc[w.nextProcessCode].waiting.push(w);
+    if (w.lotStatus === "HOLD" && w.currentProcessCode && byProc[w.currentProcessCode]) byProc[w.currentProcessCode].holds.push(w);
+  });
+  const now = Date.parse(state.serverTime || new Date().toISOString());
+
+  $("line").innerHTML = PROCESS_ORDER.map((p) => {
+    const g = byProc[p];
+    const eqHtml = g.eqs.map((e) => {
+      let sub = "", progress = "";
+      if (e.status === "RUN" && e.currentLot) {
+        const elapsed = (now - Date.parse(e.runSince)) / 1000;
+        const pct = Math.max(4, Math.min(100, (elapsed / CYCLE_HINT[p]) * 100));
+        sub = `${esc(shortLot(e.currentLot))}`;
+        progress = `<div class="bar"><i style="width:${pct}%"></i></div>`;
+      } else if (e.status === "DOWN" || e.status === "PM") {
+        sub = esc(e.stopReason || "");
+      } else {
+        sub = "투입 대기";
+      }
+      const tipText = `<b>${esc(e.equipmentName)}</b><br>${STATUS_LABEL[e.status]}`
+        + (e.currentLot ? `<br>LOT ${esc(e.currentLot)} · ${hhmmss(e.runSince)} 투입` : "")
+        + (e.stopReason ? `<br>${esc(e.stopReason)} · ${hhmmss(e.stopSince)}~` : "")
+        + `<br>오늘 양품 ${fmt(e.todayGoodQty)}`;
+      return `<div class="eq ${e.status}" data-tip="${esc(tipText)}">
+          <div class="eq-top"><span>${esc(e.equipmentCode)}</span><span class="st ${e.status}">${STATUS_LABEL[e.status]}</span></div>
+          <div class="eq-lot">${sub}</div>${progress}
+        </div>`;
+    }).join("");
+    const chips = g.waiting.map((w) =>
+      `<span class="chip" data-tip="${esc(`<b>${w.lotNo}</b><br>${w.itemCode}<br>${fmt(w.qty)} EA · 대기`)}">${esc(shortLot(w.lotNo))}</span>`).join("")
+      + g.holds.map((w) =>
+      `<span class="chip hold" data-tip="${esc(`<b>${w.lotNo}</b> HOLD<br>${w.holdReason || ""}`)}">■ ${esc(shortLot(w.lotNo))}</span>`).join("");
+    return `<div class="proc">
+        <div class="proc-head"><b>${esc(g.name)}</b><span>${p}</span></div>
+        ${eqHtml}
+        <div class="queue-label">대기 ${g.waiting.length}${g.holds.length ? ` · HOLD ${g.holds.length}` : ""}</div>
+        <div class="queue">${chips}</div>
+      </div>`;
+  }).join("");
+}
+
+function renderYield(rows) {
+  const items = [...new Set(rows.map((r) => r.itemCode))];
+  if (!selectedItem || !items.includes(selectedItem)) selectedItem = items[0];
+  $("itemSeg").innerHTML = items.map((i) =>
+    `<button type="button" class="${i === selectedItem ? "on" : ""}" data-item="${esc(i)}">${esc(i.replace("MLCC-", ""))}</button>`).join("");
+  $("itemSeg").querySelectorAll("button").forEach((b) => (b.onclick = () => { selectedItem = b.dataset.item; renderYield(state.yield); }));
+
+  const mine = rows.filter((r) => r.itemCode === selectedItem);
+  const maxDefect = Math.max(0.5, ...mine.map((r) => 100 - r.yieldPct));
+  const avgDefect = mine.length ? mine.reduce((a, r) => a + (100 - r.yieldPct), 0) / mine.length : 0;
+  $("yieldBody").innerHTML = mine.map((r) => {
+    const d = 100 - r.yieldPct;
+    const warn = d > avgDefect * 1.8 && d >= 1;
+    return `<tr>
+      <td>${esc(r.processName)}</td>
+      <td class="num col-in">${fmt(r.inQty)}</td>
+      <td class="num">${r.yieldPct.toFixed(2)}%</td>
+      <td class="barcell"><div class="hbar ${warn ? "warn" : ""}"
+          data-tip="${esc(`<b>${r.processName}</b><br>불량률 ${d.toFixed(2)}% (${fmt(r.inQty - r.goodQty)} EA)<br>누적 직행률 ${r.cumulativeRtyPct}%`)}">
+          <i style="width:${(d / maxDefect) * 100}%"></i></div></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="4" class="empty">실적 없음</td></tr>`;
+  const last = mine[mine.length - 1];
+  $("rty").innerHTML = last
+    ? `<span>직행률(RTY) ${esc(last.processName)}까지 <b>${last.cumulativeRtyPct}%</b></span>
+       <span class="legend"><span><i style="background:var(--series-1)"></i>불량률</span>
+       <span><i style="background:var(--series-2)"></i>공정 평균의 1.8배 이상</span></span>`
+    : "";
+}
+
+function renderPareto(rows) {
+  if (!rows.length) { $("pareto").innerHTML = `<div class="empty">불량 실적 없음</div>`; return; }
+  const max = rows[0].qty;
+  $("pareto").innerHTML = rows.map((r, i) => `
+    <div class="pareto-row ${r.cumulativePct <= 80 || i === 0 ? "top" : ""}">
+      <span class="name">${esc(r.defectName)}</span>
+      <div class="hbar" data-tip="${esc(`<b>${r.defectName}</b> (${r.defectCode} · ${r.processCode})<br>${fmt(r.qty)} EA · 비중 ${r.sharePct}% · 누적 ${r.cumulativePct}%`)}">
+        <i style="width:${(r.qty / max) * 100}%"></i></div>
+      <span class="num">${fmt(r.qty)}</span>
+      <span class="cum">${r.cumulativePct}%</span>
+    </div>`).join("");
+}
+
+function renderFeed(rows) {
+  $("feed").innerHTML = rows.map((r) => {
+    let d;
+    if (r.type === "TRACK_IN") d = `${esc(r.equipmentCode)} ← ${esc(r.lotNo)} · ${esc(r.processName)} ${fmt(r.qty)}`;
+    else if (r.type === "TRACK_OUT") d = `${esc(r.equipmentCode)} → ${esc(r.lotNo)} · ${esc(r.processName)} 수율 ${r.yieldPct}%${r.detail ? " · " + esc(r.detail) : ""}`;
+    else d = `${esc(r.equipmentCode)} · ${esc(r.detail || "")}`;
+    return `<div class="ev"><time>${hhmmss(r.at)}</time><span class="t ${r.type}">${EVENT_LABEL[r.type] || r.type}</span><span class="d" title="${d.replace(/<[^>]+>/g, "")}">${d}</span></div>`;
+  }).join("") || `<div class="empty">이벤트 없음</div>`;
+}
+
+function renderHolds(wip) {
+  const holds = wip.filter((w) => w.lotStatus === "HOLD");
+  $("holds").innerHTML = holds.map((w) => `
+    <div class="hold-item">
+      <div>
+        <div class="lot">${esc(w.lotNo)} <span style="color:var(--muted);font-weight:400">· ${esc(w.currentProcess || "")} · ${fmt(w.qty)} EA</span></div>
+        <div class="reason">■ ${esc(w.holdReason || "사유 없음")}</div>
+      </div>
+      <button type="button" data-release="${esc(w.lotNo)}">HOLD 해제</button>
+    </div>`).join("") || `<div class="empty">HOLD된 LOT이 없습니다.</div>`;
+  $("holds").querySelectorAll("[data-release]").forEach((b) => (b.onclick = () => releaseHold(b.dataset.release)));
+}
+
+async function releaseHold(lotNo) {
+  const reason = prompt(`${lotNo} HOLD 해제 사유를 입력하세요`, "재측정 결과 규격 내");
+  if (!reason) return;
+  const r = await fetch(`${API}/lots/${encodeURIComponent(lotNo)}/release-hold`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ operatorId: "DASH", reason }),
+  });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); alert(e.message || "해제 실패"); }
+  refresh();
+}
+
+// ------------------------------------------------------------------ 주기 갱신
+let refreshing = false;
+async function refresh() {
+  if (refreshing) return;
+  refreshing = true;
+  try {
+    const [summary, wip, equipment, yieldRows, pareto, feed] = await Promise.all([
+      get("/reports/summary"), get("/wip"), get("/equipment"),
+      get("/reports/process-yield"), get("/reports/defect-pareto"), get("/reports/recent-activity?limit=30"),
+    ]);
+    state = { ...state, serverTime: summary.serverTime, yield: yieldRows };
+    renderKpis(summary);
+    renderLine(equipment, wip);
+    renderYield(yieldRows);
+    renderPareto(pareto);
+    renderFeed(feed);
+    renderHolds(wip);
+    lastOk = Date.now();
+    $("clock").textContent = "실시간 · " + hhmmss(summary.serverTime);
+  } catch (e) {
+    console.warn(e);
+  } finally {
+    refreshing = false;
+    $("pulse").classList.toggle("stale", Date.now() - lastOk > 6000);
+  }
+}
+
+async function checkIntegrity() {
+  try {
+    const issues = await get("/reports/integrity");
+    const b = $("integrity");
+    b.className = "badge " + (issues.length ? "bad" : "ok");
+    b.textContent = issues.length ? `✖ 정합성 이상 ${issues.length}건` : "✔ 데이터 정합성 정상";
+    b.dataset.tip = issues.length
+      ? issues.slice(0, 8).map((i) => esc(`${i.checkName} ${i.ref}`)).join("<br>")
+      : "불량 합계 · 공정 간 수량 흐름 · LOT 수량 · 분할 수량 · 설비 시간 중복 · 상태 일치 점검";
+  } catch (e) { /* 다음 주기에 재시도 */ }
+}
+
+refresh();
+checkIntegrity();
+setInterval(refresh, 2000);
+setInterval(checkIntegrity, 10000);
+</script>
+</body>
+</html>
