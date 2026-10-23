@@ -205,19 +205,18 @@ python scripts/equipment_simulator.py --duration 300 --loss 0.1 --drift SN-01
 
 ## 검증 결과
 
-Oracle Database **21c Express Edition** 컨테이너에서 처음부터 다시 설치해 확인 (2026-10-22).
+개인 PC(Windows, Oracle Database **21c Express Edition**)에서 처음부터 설치해 직접 실행한 결과 (2026-10-23).
 
 | 항목 | 결과 |
 |---|---|
-| `db/03_queries.sql` 조회 쿼리 | 전부 정상 실행 |
 | `demo_scenario.py` 시나리오 테스트 | **PASS 21 / FAIL 0** |
 | 동시 Track-in 10건 (같은 LOT) | 1건 성공, 9건 `INVALID_LOT_STATUS` |
 | 같은 멱등키 동시 재전송 10건 | 실제 처리 1건, 재전송 응답 9건, 수량 이중 차감 없음 |
-| 설비 시뮬레이터 5분 | Track-in/out **827 / 828건**, 완료 LOT 102개 (5,219,675 EA) |
-| 응답 유실 후 재전송 | **171건 전부** 이중 처리 없이 복구 |
-| 자동 HOLD / 해제 | 7 / 7건, 연속 HOLD로 인한 설비 점검 3회 |
-| 설비 고장 | 23회, 고장 중 투입 0건 |
-| API 오류 / 서버 ERROR 로그 | 0건 / 0건 |
+| 설비 시뮬레이터 5분 | Track-in/out **808 / 809건**, 완료 LOT 98개 (5,027,703 EA) |
+| 응답 유실 후 재전송 | **163건 전부** 이중 처리 없이 복구 |
+| 자동 HOLD / 해제 | 8 / 9건 (샘플 데이터의 HOLD 1건 포함), 연속 HOLD로 인한 설비 점검 4회 |
+| 설비 고장 | 20회, 고장 중 투입 0건 |
+| 실적 처리 오류 (Track-in / Track-out) | 0 / 0건 |
 | 데이터 정합성 점검 (`/api/reports/integrity`) | **이상 0건** |
 
 대시보드 다크 모드: [docs/dashboard-dark.png](docs/dashboard-dark.png)
